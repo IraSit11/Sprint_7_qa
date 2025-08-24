@@ -1,22 +1,17 @@
 import io.qameta.allure.Step;
-import io.restassured.RestAssured;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.*;
 import static org.hamcrest.CoreMatchers.equalTo;
 
 
-public class TestCourier {
+public class TestCourier extends BaseTest {
+
     private Integer courierId;
-
-    @Before
-    public void setUp() {
-        RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru/";
-
-    }
 
     @Step("Создание курьера   Post /api/v1/courier")
     public Response createCourier (Courier courier) {
@@ -26,17 +21,20 @@ public class TestCourier {
                         .header("Content-type", "application/json")
                         .body(courier)
                         .when()
-                        .post("/api/v1/courier");
+                        .post(Url.CREATE_COURIER);
               return response;
     }
 
     @Step("Авторизация курьера для получения ID")
-    public Response loginAndGetId() {
+    public Response loginAndGetId( ) {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("master");
+        loginCourier.setPassword("1234");
         Response response = given()
                 .header("Content-type", "application/json")
-                .body("{\"login\": \"master\", \"password\": \"1234\"}")
+                .body(loginCourier)
                 .when()
-                .post("/api/v1/courier/login");
+                .post(Url.LOGIN_COURIER);
         courierId = response.then().extract().path("id");
         return response;
 
@@ -50,7 +48,7 @@ public class TestCourier {
 
     @Step ("Проверка статуса при успешном создании курьера")
     public  void checkStatus (Response response) {
-        response.then().statusCode(201);
+        response.then().statusCode(SC_CREATED);
     }
 
     @Step ("Проверка сообщения при создании курьера без обязательного поля")
@@ -60,7 +58,15 @@ public class TestCourier {
 
     @Step ("Проверка статуса при создании курьера без обязательного поля")
     public  void checkStatusWithoutField (Response response) {
-        response.then().statusCode(400);
+        response.then().statusCode(SC_BAD_REQUEST);
+    }
+
+    @Step("Удаление курьера DELETE /api/v1/courier/")
+    public void deleteCourier () {
+        given()
+                .header("Content-type", "application/json")
+                .delete(Url.DELETE_COURIER + courierId);
+
     }
 
     @Test
@@ -68,9 +74,10 @@ public class TestCourier {
         Courier courier = new Courier("master", "1234", "Ivan");
 
         Response response = createCourier(courier);
-        checkMessage(response);
         checkStatus(response);
-        loginAndGetId();
+        checkMessage(response);
+
+
         }
 
 
@@ -79,12 +86,11 @@ public class TestCourier {
         Courier courier = new Courier("master", "1234", "Ivan");
 
         Response response = createCourier(courier);
-        checkMessage(response);
         checkStatus(response);
-        loginAndGetId();
+        checkMessage(response);
 
         Response responseDouble = createCourier(courier);
-        responseDouble.then().statusCode(409);
+        responseDouble.then().statusCode(SC_CONFLICT);
         responseDouble.then().assertThat().body("message",equalTo("Этот логин уже используется"));
 
     }
@@ -93,39 +99,36 @@ public class TestCourier {
    public void testCourierCreateWithoutLogin () {
        Courier courier = new Courier("", "1234", "Ivan");
        Response response = createCourier(courier);
-       checkMessageWithoutField(response);
        checkStatusWithoutField(response);
-       loginAndGetId();
+       checkMessageWithoutField(response);
+
    }
 
     @Test
     public void testCourierCreateWithoutPassword () {
         Courier courier = new Courier("master", "", "Ivan");
         Response response = createCourier(courier);
-        checkMessageWithoutField(response);
         checkStatusWithoutField(response);
-        loginAndGetId();
+        checkMessageWithoutField(response);
+
     }
 
     @Test
     public void testCourierCreateWithoutFirstName () {
         Courier courier = new Courier("master", "1234", "");
         Response response = createCourier(courier);
-        checkMessage(response);
         checkStatus(response);
-        loginAndGetId();
+        checkMessage(response);
 
     }
 
 
     @After
     public void tearDown() {
+        loginAndGetId();
         if(courierId != null) {
-            given()
-                    .header("Content-type", "application/json")
-                    .delete("/api/v1/courier/" + courierId);
+            deleteCourier();
         }
-
     }
 
 }

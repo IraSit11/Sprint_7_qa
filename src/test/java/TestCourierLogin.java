@@ -6,18 +6,17 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.*;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsNull.notNullValue;
 
-public class TestCourierLogin {
+public class TestCourierLogin extends  BaseTest{
 
     private Integer courierId;
 
     @Before
     public void setUp() {
-        RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru/";
         createCourier();
-
     }
 
     @Step("Создание курьера")
@@ -28,17 +27,20 @@ public class TestCourierLogin {
                         .header("Content-type", "application/json")
                         .body(courier)
                         .when()
-                        .post("/api/v1/courier");
+                        .post(Url.CREATE_COURIER);
         return response;
     }
 
     @Step("Успешная аутентификация курьера  post /api/v1/courier/login")
     public Response courierAuth () {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("misters");
+        loginCourier.setPassword("1234");
         Response response = given ()
                 .header("Content-type", "application/json")
-                .body("{\"login\": \"misters\", \"password\": \"1234\"}")
+                .body(loginCourier)
                 .when()
-                .post("/api/v1/courier/login");
+                .post(Url.LOGIN_COURIER);
         courierId = response.then().extract().path("id");
         return response;
 
@@ -50,17 +52,18 @@ public class TestCourierLogin {
     }
 
     @Step ("Проверка статуса при успешном входе")
-    public  void checkStatus (Response response) {
-        response.then().statusCode(200);
-    }
+    public  void checkStatus (Response response) {        response.then().statusCode(SC_OK);    }
 
     @Step("Авторизация курьера без логина ")
     public Response courierAuthWithoutLogin () {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("");
+        loginCourier.setPassword("1234");
         Response response = given ()
                 .header("Content-type", "application/json")
-                .body("{\"login\": \"\", \"password\": \"1234\"}")
+                .body(loginCourier)
                 .when()
-                .post("/api/v1/courier/login");
+                .post(Url.LOGIN_COURIER);
         courierId = response.then().extract().path("id");
 
         return response;
@@ -68,11 +71,14 @@ public class TestCourierLogin {
 
     @Step("Авторизация курьера без пароля ")
     public Response courierAuthWithoutPassword () {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("misters");
+        loginCourier.setPassword("");
         Response response = given ()
                 .header("Content-type", "application/json")
-                .body("{\"login\": \"misters\", \"password\": \"\"}")
+                .body(loginCourier)
                 .when()
-                .post("/api/v1/courier/login");
+                .post(Url.LOGIN_COURIER);
         courierId = response.then().extract().path("id");
 
         return response;
@@ -85,29 +91,56 @@ public class TestCourierLogin {
 
     @Step ("Проверка статуса при успешном входе")
     public  void checkStatusWithoutLoginOrPassword (Response response) {
-        response.then().statusCode(400);
+        response.then().statusCode(SC_BAD_REQUEST);
     }
 
-    @Step("Авторизация несуществующего курьера ")
-    public Response courierNotFound () {
+    @Step("Авторизация несуществующего курьера (неверный логин) ")
+    public Response courierNotFoundLogin () {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("hello");
+        loginCourier.setPassword("1234");
         Response response = given ()
                 .header("Content-type", "application/json")
-                .body("{\"login\": \"hello\", \"password\": \"1454\"}")
+                .body(loginCourier)
                 .when()
-                .post("/api/v1/courier/login");
+                .post(Url.LOGIN_COURIER);
         courierId = response.then().extract().path("id");
 
         return response;
     }
+    @Step("Авторизация несуществующего курьера (неверный пароль) ")
+    public Response courierNotFoundPassword () {
+        Courier loginCourier = new Courier();
+        loginCourier.setLogin("misters");
+        loginCourier.setPassword("1454");
+        Response response = given ()
+                .header("Content-type", "application/json")
+                .body(loginCourier)
+                .when()
+                .post(Url.LOGIN_COURIER);
+        courierId = response.then().extract().path("id");
+
+        return response;
+    }
+
 
     @Step ("Проверка сообщения при авторизации несуществующего курьера")
     public  void checkMessageCourierNotFound (Response response) {
         response.then().assertThat().body("message", equalTo("Учетная запись не найдена"));
     }
 
+
     @Step ("Проверка статуса при авторизации несуществующего курьера")
     public  void checkStatusCourierNotFound (Response response) {
-        response.then().statusCode(404);
+        response.then().statusCode(SC_NOT_FOUND);
+    }
+
+    @Step("Удаление курьера DELETE /api/v1/courier/")
+    public void deleteCourier () {
+        given()
+                .header("Content-type", "application/json")
+                .delete(Url.DELETE_COURIER + courierId);
+
     }
 
 
@@ -115,31 +148,43 @@ public class TestCourierLogin {
     public void testCourierAuth() {
 
        Response response = courierAuth();
+        checkStatus(response);
        checkMessage(response);
-       checkStatus(response);
+
     }
 
     @Test
     public void testCourierAuthWithoutLogin () {
 
         Response response = courierAuthWithoutLogin();
-        checkMessageWithoutLoginOrPassword(response);
         checkStatusWithoutLoginOrPassword(response);
+        checkMessageWithoutLoginOrPassword(response);
+
     }
 
     @Test
     public void testCourierAuthWithoutPassword () {
 
         Response response = courierAuthWithoutPassword();
-        checkMessageWithoutLoginOrPassword(response);
         checkStatusWithoutLoginOrPassword(response);
+        checkMessageWithoutLoginOrPassword(response);
+
     }
 
     @Test
-    public void testCourierNotFound () {
-        Response response = courierNotFound();
-        checkMessageCourierNotFound(response);
+    public void testCourierNotFoundLogin () {
+        Response response = courierNotFoundLogin();
         checkStatusCourierNotFound(response);
+        checkMessageCourierNotFound(response);
+
+
+    }
+
+    @Test
+    public void testCourierNotFoundPassword () {
+        Response response = courierNotFoundPassword();
+        checkStatusCourierNotFound(response);
+        checkMessageCourierNotFound(response);
 
     }
 
@@ -148,11 +193,7 @@ public class TestCourierLogin {
     @After
     public void tearDown() {
         if(courierId != null) {
-            given()
-                    .header("Content-type", "application/json")
-                    .delete("/api/v1/courier/" + courierId);
-
+            deleteCourier();
         }
-
     }
 }

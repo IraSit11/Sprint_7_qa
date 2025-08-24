@@ -1,8 +1,6 @@
 import io.qameta.allure.Step;
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -10,21 +8,19 @@ import org.junit.runners.Parameterized;
 import java.util.List;
 
 import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.SC_CREATED;
 import static org.hamcrest.core.IsNull.notNullValue;
 
 
 @RunWith(Parameterized.class)
-public class TestCreateOrder {
+public class TestCreateOrder extends BaseTest {
 
     private Integer trackId;
     public List<String> color;
     public TestCreateOrder (List<String> color) {
         this.color = color;
     }
-    @Before
-    public void setUp() {
-        RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru/";
-    }
+
 
     @Step("Создание заказа")
     public Response createOrder (Order order) {
@@ -33,7 +29,7 @@ public class TestCreateOrder {
                         .header("Content-type", "application/json")
                         .body(order)
                         .when()
-                        .post("/api/v1/orders");
+                        .post(Url.CREATE_ORDER);
         return response;
     }
     @Step("Проверка сообщения ответа")
@@ -42,8 +38,16 @@ public class TestCreateOrder {
     }
     @Step("Проверка статуса ответа")
     public  void checkStatus (Response response) {
-        response.then().statusCode(201);
+        response.then().statusCode(SC_CREATED);
     }
+
+    @Step ("Удаление заказа Delete /api/v1/orders/cancel")
+    public void deleteOrder () {
+        given()
+                .header("Content-type", "application/json")
+                .put(Url.DELETE_ORDER + trackId);
+    }
+
 
     @Parameterized.Parameters (name = "Цвет самоката: {0}")
     public static Object[][] testColor () {
@@ -66,8 +70,9 @@ public class TestCreateOrder {
                 "самокат",
                 color);
         Response response = createOrder(order);
-        checkMessage(response);
         checkStatus(response);
+        checkMessage(response);
+
         trackId= response.then().extract().path("track");
 
     }
@@ -76,9 +81,7 @@ public class TestCreateOrder {
     @After
     public void tearDown() {
         if(trackId != null) {
-            given()
-                    .header("Content-type", "application/json")
-                    .put("/api/v1/orders/cancel" + trackId);
+            deleteOrder();
         }
 
     }
